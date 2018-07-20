@@ -315,6 +315,16 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
  检测是能能通过 Wi-Fi 访问数据（这里并不是检测连通性，不能拿来判断网络是否真正连接成功）
  */
 - (void)checkWiFiReachable:(void(^)(BOOL isReachable))block {
+    static BOOL _firstCheck = YES;
+    
+    if (_firstCheck) {
+        // 刚开始启动可能会返回错误的结果 先延迟一下
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self checkWiFiReachable:block];
+            _firstCheck = NO;
+        });
+        return;
+    }
     
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, "223.5.5.5");
