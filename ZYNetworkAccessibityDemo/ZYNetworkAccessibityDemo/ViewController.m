@@ -9,6 +9,11 @@
 #import "ViewController.h"
 #import "ZYNetworkAccessibity.h"
 
+#import <SystemConfiguration/CaptiveNetwork.h>
+#import <CoreTelephony/CTTelephonyNetworkInfo.h>
+#import <CoreTelephony/CTCellularData.h>
+#import <SystemConfiguration/SystemConfiguration.h>
+
 @interface ViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *label;
 
@@ -28,6 +33,11 @@ static NSString * NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibleState 
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    
+   
+
+    
     
     [ZYNetworkAccessibity setAlertEnable:YES];
     
