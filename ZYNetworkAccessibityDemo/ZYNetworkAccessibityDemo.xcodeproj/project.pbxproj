@@ -13,7 +13,7 @@
 		089F15E42101CA9700ADD699 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 089F15E32101CA9700ADD699 /* Assets.xcassets */; };
 		089F15E72101CA9700ADD699 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 089F15E52101CA9700ADD699 /* LaunchScreen.storyboard */; };
 		089F15EA2101CA9700ADD699 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 089F15E92101CA9700ADD699 /* main.m */; };
-		089F15F72101E48A00ADD699 /* ZYNetworkAccessibity.m in Sources */ = {isa = PBXBuildFile; fileRef = 089F15F62101E48A00ADD699 /* ZYNetworkAccessibity.m */; };
+		089F15FB2101E4F700ADD699 /* ZYNetworkAccessibity.m in Sources */ = {isa = PBXBuildFile; fileRef = 089F15FA2101E4F700ADD699 /* ZYNetworkAccessibity.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,8 +27,8 @@
 		089F15E62101CA9700ADD699 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		089F15E82101CA9700ADD699 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		089F15E92101CA9700ADD699 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
-		089F15F52101E48A00ADD699 /* ZYNetworkAccessibity.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ZYNetworkAccessibity.h; sourceTree = "<group>"; };
-		089F15F62101E48A00ADD699 /* ZYNetworkAccessibity.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ZYNetworkAccessibity.m; sourceTree = "<group>"; };
+		089F15F92101E4F700ADD699 /* ZYNetworkAccessibity.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ZYNetworkAccessibity.h; sourceTree = "<group>"; };
+		089F15FA2101E4F700ADD699 /* ZYNetworkAccessibity.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ZYNetworkAccessibity.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,7 +61,7 @@
 		089F15D92101CA9500ADD699 /* ZYNetworkAccessibityDemo */ = {
 			isa = PBXGroup;
 			children = (
-				089F15F42101E48A00ADD699 /* ZYNetworkAccessibity */,
+				089F15F82101E4F700ADD699 /* ZYNetworkAccessibity */,
 				089F15DA2101CA9500ADD699 /* AppDelegate.h */,
 				089F15DB2101CA9500ADD699 /* AppDelegate.m */,
 				089F15DD2101CA9500ADD699 /* ViewController.h */,
@@ -75,14 +75,15 @@
 			path = ZYNetworkAccessibityDemo;
 			sourceTree = "<group>";
 		};
-		089F15F42101E48A00ADD699 /* ZYNetworkAccessibity */ = {
+		089F15F82101E4F700ADD699 /* ZYNetworkAccessibity */ = {
 			isa = PBXGroup;
 			children = (
-				089F15F52101E48A00ADD699 /* ZYNetworkAccessibity.h */,
-				089F15F62101E48A00ADD699 /* ZYNetworkAccessibity.m */,
+				089F15F92101E4F700ADD699 /* ZYNetworkAccessibity.h */,
+				089F15FA2101E4F700ADD699 /* ZYNetworkAccessibity.m */,
 			);
-			path = ZYNetworkAccessibity;
-			sourceTree = SOURCE_ROOT;
+			name = ZYNetworkAccessibity;
+			path = ../../ZYNetworkAccessibity;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
@@ -155,7 +156,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				089F15DF2101CA9500ADD699 /* ViewController.m in Sources */,
-				089F15F72101E48A00ADD699 /* ZYNetworkAccessibity.m in Sources */,
+				089F15FB2101E4F700ADD699 /* ZYNetworkAccessibity.m in Sources */,
 				089F15EA2101CA9700ADD699 /* main.m in Sources */,
 				089F15DC2101CA9500ADD699 /* AppDelegate.m in Sources */,
 			);
