@@ -19,6 +19,7 @@
 NSString * const ZYNetworkAccessibityChangedNotification = @"ZYNetworkAccessibityChangedNotification";
 
 typedef NS_ENUM(NSInteger, ZYNetworkType) {
+    ZYNetworkTypeUnknown ,
     ZYNetworkTypeOffline ,
     ZYNetworkTypeWiFi    ,
     ZYNetworkTypeCellularData ,
@@ -153,6 +154,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 
 #pragma mark - NSNotification
 
+
 - (void)applicationWillResignActive {
     
     [self hideNetworkRestrictedAlert];
@@ -165,8 +167,6 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 
 
 static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void* info) {
-
-    NSLog(@"ReachabilityCallback");
     
     ZYNetworkAccessibity *networkAccessibity = (__bridge ZYNetworkAccessibity *)info;
     if (![networkAccessibity isKindOfClass: [ZYNetworkAccessibity class]]) {
@@ -197,15 +197,18 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
 - (void)startCheck {
     
-    /* iOS 10 以下 不够用检测默认通过 **/
-    
-    /* 先用 currentReachable 判断，若返回的为 YES 则说明：
-     1. 用户选择了 「WALN 与蜂窝移动网」并处于其中一种网络环境下。
-     2. 用户选择了 「WALN」并处于 WALN 网络环境下。
-     
-     此时是有网络访问权限的，直接返回 ZYNetworkAccessible
-    **/
+
     if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self currentReachable]) {
+        
+        /* iOS 10 以下 不够用检测默认通过 **/
+        
+        /* 先用 currentReachable 判断，若返回的为 YES 则说明：
+         1. 用户选择了 「WALN 与蜂窝移动网」并处于其中一种网络环境下。
+         2. 用户选择了 「WALN」并处于 WALN 网络环境下。
+         
+         此时是有网络访问权限的，直接返回 ZYNetworkAccessible
+         **/
+        
         [self notiWithAccessibleState:ZYNetworkAccessible];
         return;
     }
@@ -240,18 +243,17 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
 
 - (void)getCurrentNetworkType:(void(^)(ZYNetworkType))block {
+   
     if ([self isWiFiEnable]) {
         return block(ZYNetworkTypeWiFi);
     }
-   ZYNetworkType type = [self getNetworkTypeFromStatusBar];
-    if (type == ZYNetworkTypeOffline) {
-        block(ZYNetworkTypeOffline);
-    } else if (type == ZYNetworkTypeWiFi) { // 这时候从状态栏拿到的是 Wi-Fi 说明状态栏没有刷新，延迟一会再获取
+    ZYNetworkType type = [self getNetworkTypeFromStatusBar];
+    if (type == ZYNetworkTypeWiFi) { // 这时候从状态栏拿到的是 Wi-Fi 说明状态栏没有刷新，延迟一会再获取
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self getCurrentNetworkType:block];
         });
     } else {
-        block(ZYNetworkTypeCellularData);
+        block(type);
     }
 }
 
@@ -262,14 +264,27 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
         UIApplication *app = [UIApplication sharedApplication];
         UIView *statusBar = [app valueForKeyPath:@"statusBar"];
         
+        if (statusBar == nil ){
+            return ZYNetworkTypeUnknown;
+        }
+        
         BOOL isModernStatusBar = [statusBar isKindOfClass:NSClassFromString(@"UIStatusBar_Modern")];
         
         if (isModernStatusBar) { // 在 iPhone X 上 statusBar 属于 UIStatusBar_Modern ，需要特殊处理
-            type = [[statusBar valueForKeyPath:@"statusBar.currentData.cellularEntry.type"] integerValue];
             
-            // type == 0  => 没有开启蜂窝数据
-            // type == 3  => 2G
-            // type == 3  => 4G
+            id currentData = [statusBar valueForKeyPath:@"statusBar.currentData"];
+            
+            BOOL wifiEnable = [[currentData valueForKeyPath:@"_wifiEntry.isEnabled"] boolValue];
+            
+            // 这里不能用 _cellularEntry.isEnabled 来判断，该值即使关闭仍然有是 YES
+            
+            BOOL cellularEnable = [[currentData valueForKeyPath:@"_cellularEntry.type"] boolValue];
+            
+            return  wifiEnable     ? ZYNetworkTypeWiFi :
+                    cellularEnable ? ZYNetworkTypeCellularData : ZYNetworkTypeOffline;
+            
+            
+            
         } else { // 传统的 statusBar
             NSArray *children = [[statusBar valueForKeyPath:@"foregroundView"] subviews];
             for (id child in children) {
@@ -284,12 +299,13 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
                     
                 }
             }
+            return type == 0 ? ZYNetworkTypeOffline :
+                   type == 5 ? ZYNetworkTypeWiFi    : ZYNetworkTypeCellularData;
         }
     } @catch (NSException *exception) {
         
     }
-    return type == 0 ? ZYNetworkTypeOffline :
-           type == 5 ? ZYNetworkTypeWiFi    : ZYNetworkTypeCellularData;
+    return 0;
     
     
 }
