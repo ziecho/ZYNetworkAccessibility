@@ -64,6 +64,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 
 #pragma mark - Public entity method
 
+
 + (ZYNetworkAccessibity *)sharedInstance {
     static ZYNetworkAccessibity * instance = nil;
     static dispatch_once_t onceToken;
@@ -94,7 +95,6 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 - (void)monitorNetworkAccessibleStateWithCompletionBlock:(void (^)(ZYNetworkAccessibleState))block {
     
     _networkAccessibleStateDidUpdateNotifier = [block copy];
-    
 }
 
 
@@ -103,6 +103,12 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 }
 
 #pragma mark - Life cycle
+
++ (void)load {
+    // 默认开启，这么写不太适合，后面可以提供下开关
+    
+    [ZYNetworkAccessibity sharedInstance];
+}
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
@@ -114,13 +120,18 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
         _cellularData = [[CTCellularData alloc] init];
         
         __weak __typeof(self)weakSelf = self;
+        
+        // 利用 cellularDataRestrictionDidUpdateNotifier 的回调时机来进行首次检查，因为如果启动时就去检查 会得到 kCTCellularDataRestrictedStateUnknown 的结果
         _cellularData.cellularDataRestrictionDidUpdateNotifier = ^(CTCellularDataRestrictedState state) {
             __strong __typeof(weakSelf)strongSelf = weakSelf;
             dispatch_async(dispatch_get_main_queue(), ^{
-                [strongSelf cellularDataRestrictionDidUpdateState:state];
+                [strongSelf startCheck];
+                // 只需要检查一遍
+                strongSelf->_cellularData.cellularDataRestrictionDidUpdateNotifier = nil;
             });
         };
         
+        // 监听网络变化状态
         _reachabilityRef = ({
             struct sockaddr_in zeroAddress;
             bzero(&zeroAddress, sizeof(zeroAddress));
@@ -134,6 +145,8 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:[UIApplication sharedApplication]];
         
         [self startNotifier];
+        
+        
     }
     return self;
 }
@@ -145,10 +158,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     [self hideNetworkRestrictedAlert];
 }
 
-- (void)cellularDataRestrictionDidUpdateState:(CTCellularDataRestrictedState)state {
-    
-    [self startCheck];
-}
+
 
 
 #pragma mark - Private
@@ -156,15 +166,17 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 
 static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void* info) {
 
+    NSLog(@"ReachabilityCallback");
+    
     ZYNetworkAccessibity *networkAccessibity = (__bridge ZYNetworkAccessibity *)info;
     if (![networkAccessibity isKindOfClass: [ZYNetworkAccessibity class]]) {
         return;
     }
-    // 当从 Wi-Fi 切换到 蜂窝数据，或者从蜂窝数据切换到 Wi-Fi时，需要判断一次
+    
     [networkAccessibity startCheck];
 }
 
-// 监听用户从 Wi-Fi 切换到 蜂窝数据，或者从蜂窝数据切换到 Wi-Fi
+// 监听用户从 Wi-Fi 切换到 蜂窝数据，或者从蜂窝数据切换到 Wi-Fi，另外当从授权到未授权，或者未授权到授权也会调用该方法
 - (BOOL)startNotifier {
     BOOL returnValue = NO;
     SCNetworkReachabilityContext context = {0, (__bridge void *)(self), NULL, NULL, NULL};
@@ -185,10 +197,17 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
 - (void)startCheck {
     
+    /* iOS 10 以下 不够用检测默认通过 **/
     
-    if ([UIDevice currentDevice].systemVersion.floatValue < 10.0) {
-        /* iOS 10 以下 */
+    /* 先用 currentReachable 判断，若返回的为 YES 则说明：
+     1. 用户选择了 「WALN 与蜂窝移动网」并处于其中一种网络环境下。
+     2. 用户选择了 「WALN」并处于 WALN 网络环境下。
+     
+     此时是有网络访问权限的，直接返回 ZYNetworkAccessible
+    **/
+    if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self currentReachable]) {
         [self notiWithAccessibleState:ZYNetworkAccessible];
+        return;
     }
     
     CTCellularDataRestrictedState state = _cellularData.restrictedState;
@@ -196,33 +215,16 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     switch (state) {
         case kCTCellularDataRestricted: {// 系统 API 返回 无蜂窝数据访问权限
             
-            // 这里可能有两种情况:
-            //情况1：用户选择了： 仅WLAN
-            //情况2：用户选择了： 不允许 WLAN 和 蜂窝数据
+            [self getCurrentNetworkType:^(ZYNetworkType type) {
+                /*  若用户是通过蜂窝数据 或 WLAN 上网，走到这里来 说明权限被关闭**/
+                
+                if (type == ZYNetworkTypeCellularData || type == ZYNetworkTypeWiFi) {
+                    [self notiWithAccessibleState:ZYNetworkRestricted];
+                } else {  // 可能开了飞行模式，无法判断
+                    [self notiWithAccessibleState:ZYNetworkUnknown];
+                }
+            }];
             
-            ZYNetworkType type = [self currentNetworkType];
-            
-            
-            if (type == ZYNetworkTypeCellularData) {
-                /* 当前仅启用了蜂窝数据，没有 Wi-Fi 无法继续监测是那种情况 */
-                
-                [self notiWithAccessibleState:ZYNetworkRestricted];
-                
-            } else if (type == ZYNetworkTypeWiFi){
-                
-                /* 当前启用了 Wi-Fi ，可以通过简单测试 Wi-Fi 的连通性来判断用户选择了那种情况（不一定准确）*/
-                
-                [self checkWiFiReachable:^(BOOL isReachable) {
-                    if (!isReachable) { // 可能是 不允许 WLAN 和 蜂窝数据
-                        [self notiWithAccessibleState:ZYNetworkRestricted];
-                    } else { // 可能是 仅WLAN
-                        [self notiWithAccessibleState:ZYNetworkAccessible];
-                    }
-                }];
-                
-            } else {   // 可能开了飞行模式，无法判断
-                [self notiWithAccessibleState:ZYNetworkUnknown];
-            }
             break;
         }
         case kCTCellularDataNotRestricted: // 系统 API 访问有有蜂窝数据访问权限，那就必定有 Wi-Fi 数据访问权限
@@ -237,44 +239,23 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 }
 
 
-/**
- 判断当前网络类型
-
- @return
- ZYNetworkTypeWiFi => 可能仅有 Wi-Fi，或者同时开启了 Wi-Fi 和 蜂窝数据
- ZYNetworkTypeCellularData => 只有蜂窝数据
- ZYNetworkTypeWiFi         => 飞行模式或关闭了 Wi-Fi 和 蜂窝数据
- */
-- (ZYNetworkType)currentNetworkType {
+- (void)getCurrentNetworkType:(void(^)(ZYNetworkType))block {
     if ([self isWiFiEnable]) {
-        return ZYNetworkTypeWiFi;
-    } else if ([self isCellularDataEnable]) {
-        return ZYNetworkTypeCellularData;
+        return block(ZYNetworkTypeWiFi);
+    }
+   ZYNetworkType type = [self getNetworkTypeFromStatusBar];
+    if (type == ZYNetworkTypeOffline) {
+        block(ZYNetworkTypeOffline);
+    } else if (type == ZYNetworkTypeWiFi) { // 这时候从状态栏拿到的是 Wi-Fi 说明状态栏没有刷新，延迟一会再获取
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self getCurrentNetworkType:block];
+        });
     } else {
-        return ZYNetworkTypeOffline;
+        block(ZYNetworkTypeCellularData);
     }
 }
 
-/**
- 判断用户是否连接到 Wi-Fi
- */
-- (BOOL)isWiFiEnable {
-    NSArray *interfaces = (__bridge_transfer NSArray *)CNCopySupportedInterfaces();
-    if (!interfaces) {
-        return NO;
-    }
-    NSDictionary *info = nil;
-    for (NSString *ifnam in interfaces) {
-        info = (__bridge_transfer NSDictionary *)CNCopyCurrentNetworkInfo((__bridge CFStringRef)ifnam);
-        if (info && [info count]) { break; }
-    }
-    return (info != nil);
-}
-
-/**
- 判断用户是否有蜂窝数据
- */
-- (BOOL)isCellularDataEnable {
+- (ZYNetworkType)getNetworkTypeFromStatusBar {
     NSInteger type = 0;
     
     @try {
@@ -300,56 +281,51 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
                     // type == 3  => 4G
                     // type == 4  => LTE
                     // type == 5  => Wi-Fi
+                    
                 }
             }
         }
     } @catch (NSException *exception) {
         
     }
+    return type == 0 ? ZYNetworkTypeOffline :
+           type == 5 ? ZYNetworkTypeWiFi    : ZYNetworkTypeCellularData;
     
-    return type != 0;
+    
 }
 
 
 /**
- 检测是能能通过 Wi-Fi 访问数据（这里并不是检测连通性，不能拿来判断网络是否真正连接成功）
+ 判断用户是否连接到 Wi-Fi
  */
-- (void)checkWiFiReachable:(void(^)(BOOL isReachable))block {
-    static BOOL _firstCheck = YES;
-    
-    if (_firstCheck) {
-        // 刚开始启动可能会返回错误的结果 先延迟一下
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self checkWiFiReachable:block];
-            _firstCheck = NO;
-        });
-        return;
+- (BOOL)isWiFiEnable {
+    NSArray *interfaces = (__bridge_transfer NSArray *)CNCopySupportedInterfaces();
+    if (!interfaces) {
+        return NO;
     }
-    
-    dispatch_async(dispatch_get_global_queue(0, 0), ^{
-        SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, "223.5.5.5");
-        SCNetworkReachabilityFlags flags;
-        BOOL success = SCNetworkReachabilityGetFlags(reachability, &flags);
-        CFRelease(reachability);
-        
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (!success) {
-                return block(NO);
-            }
-            BOOL isReachable = ((flags & kSCNetworkReachabilityFlagsReachable) != 0);
-            BOOL needsConnection = ((flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0);
-            BOOL isNetworkReachable = (isReachable && !needsConnection);
-            
-            if (!isNetworkReachable) {
-                return block(NO);
-            }  else {
-                return block(YES);
-            }
-        });
-
-    });
-
+    NSDictionary *info = nil;
+    for (NSString *ifnam in interfaces) {
+        info = (__bridge_transfer NSDictionary *)CNCopyCurrentNetworkInfo((__bridge CFStringRef)ifnam);
+        if (info && [info count]) { break; }
+    }
+    return (info != nil);
 }
+
+
+
+- (BOOL)currentReachable {
+    SCNetworkReachabilityFlags flags;
+    if (SCNetworkReachabilityGetFlags(self->_reachabilityRef, &flags)) {
+        if ((flags & kSCNetworkReachabilityFlagsReachable) == 0) {
+            return NO;
+        } else {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+
 
 #pragma mark - Callback
 
@@ -358,7 +334,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     
     if (_automaticallyAlert) {
         if (state == ZYNetworkRestricted) {
-            [self showNetworkRestrictedAlert];
+                [self showNetworkRestrictedAlert];
         } else {
             [self hideNetworkRestrictedAlert];
         }
