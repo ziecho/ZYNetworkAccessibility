@@ -129,11 +129,25 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
             SCNetworkReachabilityCreateWithAddress(kCFAllocatorDefault, (const struct sockaddr *) &zeroAddress);
         });
         
+        // 利用 cellularDataRestrictionDidUpdateNotifier 的回调时机来进行首次检查，因为如果启动时就去检查 会得到 kCTCellularDataRestrictedStateUnknown 的结果
+        __weak __typeof(self)weakSelf = self;
+        _cellularData.cellularDataRestrictionDidUpdateNotifier = ^(CTCellularDataRestrictedState state) {
+            
+            __strong __typeof(weakSelf)strongSelf = weakSelf;
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+                    [[NSNotificationCenter defaultCenter] addObserver:strongSelf selector:@selector(applicationDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
+                } else {
+                    [strongSelf startCheck];
+                }
+            });
+            
+        };
+        
         _checkingCallbacks = [NSMutableArray array];
         
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
-        
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
         
         [self startNotifier];
         
