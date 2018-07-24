@@ -19,13 +19,11 @@
 
 ## 用法
 
-1、将 ZYNetworkAccessibity.h 和 ZYNetworkAccessibity.m 拖项目中
-2、在合适的时机，比如 didFinishLaunchingWithOptions 开启，ZYNetworkAccessibity：
+1、将 ZYNetworkAccessibity.h 和 ZYNetworkAccessibity.m 在合适的时机，比如 didFinishLaunchingWithOptions 开启，ZYNetworkAccessibity：
 ```objc
 [ZYNetworkAccessibity start];
-}
 ```
-3、监听 ZYNetworkAccessibityChangedNotification 并处理通知
+2、监听 ZYNetworkAccessibityChangedNotification 并处理通知
 
 ```objc
 [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkChanged:) name:ZYNetworkAccessibityChangedNotification object:nil];
