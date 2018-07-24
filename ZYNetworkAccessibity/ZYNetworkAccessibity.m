@@ -120,18 +120,6 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
         
         _cellularData = [[CTCellularData alloc] init];
         
-        __weak __typeof(self)weakSelf = self;
-        
-        // 利用 cellularDataRestrictionDidUpdateNotifier 的回调时机来进行首次检查，因为如果启动时就去检查 会得到 kCTCellularDataRestrictedStateUnknown 的结果
-        _cellularData.cellularDataRestrictionDidUpdateNotifier = ^(CTCellularDataRestrictedState state) {
-            __strong __typeof(weakSelf)strongSelf = weakSelf;
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [strongSelf startCheck];
-                // 只需要检查一遍
-                strongSelf->_cellularData.cellularDataRestrictionDidUpdateNotifier = nil;
-            });
-        };
-        
         // 监听网络变化状态
         _reachabilityRef = ({
             struct sockaddr_in zeroAddress;
@@ -143,7 +131,9 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
         
         _checkingCallbacks = [NSMutableArray array];
         
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:[UIApplication sharedApplication]];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
+        
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
         
         [self startNotifier];
         
@@ -160,7 +150,12 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     [self hideNetworkRestrictedAlert];
 }
 
-
+- (void)applicationDidBecomeActive {
+    
+    [self startCheck];
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
+}
 
 
 #pragma mark - Private
@@ -197,7 +192,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
 - (void)startCheck {
     
-
     if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self currentReachable]) {
         
         /* iOS 10 以下 不够用检测默认通过 **/
