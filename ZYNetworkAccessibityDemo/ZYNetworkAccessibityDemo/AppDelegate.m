@@ -7,6 +7,7 @@
 //
 
 #import "AppDelegate.h"
+#import "ZYNetworkAccessibity.h"
 
 @interface AppDelegate ()
 
@@ -17,15 +18,10 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     
+    [ZYNetworkAccessibity setAlertEnable:YES];
     
-    // 发起一个网络请求以触发系统的弹框
+    [ZYNetworkAccessibity start];
     
-    NSURL *url = [NSURL URLWithString:@"http://api.m.taobao.com/rest/api3.do?api=mtop.common.getTimestamp"];
-    NSURLRequest *request = [NSURLRequest requestWithURL:url];
-    [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
-    }] resume];
-    
-    // Override point for customization after application launch.
     return YES;
 }
 

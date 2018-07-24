@@ -22,7 +22,8 @@
 @implementation ViewController
 
 static NSString * NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibleState state) {
-    return state == ZYNetworkUnknown    ? @"ZYNetworkUnknown"    :
+    return state == ZYNetworkChecking   ? @"ZYNetworkChecking"   :
+           state == ZYNetworkUnknown    ? @"ZYNetworkUnknown"    :
            state == ZYNetworkAccessible ? @"ZYNetworkAccessible" :
            state == ZYNetworkRestricted ? @"ZYNetworkRestricted" : nil;
 }
@@ -35,11 +36,12 @@ static NSString * NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibleState 
     [super viewDidLoad];
     
     
-    [ZYNetworkAccessibity setAlertEnable:YES];
+    [ZYNetworkAccessibity checkState:^(ZYNetworkAccessibleState state) {
+        NSLog(@"checkState : %@",NSStringFromZYNetworkAccessibleState(state));
+    }];
     
     self.label.text = NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibity.currentState);
     
-    NSLog(@"viewDidLoad : %@",NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibity.currentState));
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkChanged:) name:ZYNetworkAccessibityChangedNotification object:nil];
 }
@@ -47,6 +49,9 @@ static NSString * NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibleState 
 - (void)networkChanged:(NSNotification *)notification {
     
     ZYNetworkAccessibleState state = ZYNetworkAccessibity.currentState;
+    if (state == ZYNetworkAccessible) {
+        ;
+    }
     self.label.text = NSStringFromZYNetworkAccessibleState(state);
     
     NSLog(@"networkChanged : %@",NSStringFromZYNetworkAccessibleState(state));

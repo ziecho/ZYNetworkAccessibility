@@ -10,7 +10,8 @@
 extern NSString * const ZYNetworkAccessibityChangedNotification;
 
 typedef NS_ENUM(NSUInteger, ZYNetworkAccessibleState) {
-    ZYNetworkUnknown     = 0,
+    ZYNetworkChecking  = 0,
+    ZYNetworkUnknown     ,
     ZYNetworkAccessible  ,
     ZYNetworkRestricted  ,
 };
@@ -20,19 +21,29 @@ typedef void (^NetworkAccessibleStateNotifier)(ZYNetworkAccessibleState state);
 @interface ZYNetworkAccessibity : NSObject
 
 /**
+ 开启 ZYNetworkAccessibity
+ */
++ (void)start;
+
+/**
+ 停止 ZYNetworkAccessibity
+ */
++ (void)stop;
+
+/**
  当判断网络状态为 ZYNetworkRestricted 时，提示用户开启网络权限
  */
 
 + (void)setAlertEnable:(BOOL)setAlertEnable;
 
 /**
- 监控网络权限变化，等网络权限发生变化时回调。
+ 监控网络权限变化（block 方式），等网络权限发生变化时回调。
  */
 
 + (void)monitor:(void (^)(ZYNetworkAccessibleState))block;
 
 /**
- 检查网络状态，若弹出系统级别的 Alert，用户未处理则会等到用户处理完毕后才回调，改方法只会回调一次。
+ 检查网络状态，若弹出系统级别的 Alert，用户未处理则会等到用户处理完毕后才回调，该方法只会回调一次。
  */
 
 + (void)checkState:(void (^)(ZYNetworkAccessibleState))block;

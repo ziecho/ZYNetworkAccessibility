@@ -29,33 +29,44 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     SCNetworkReachabilityRef _reachabilityRef;
     CTCellularData *_cellularData;
     NSMutableArray *_checkingCallbacks;
+    NSMutableArray *_becomeActiveCallbacks;
     ZYNetworkAccessibleState _previousState;
     UIAlertController *_alertController;
     BOOL _automaticallyAlert;
     NetworkAccessibleStateNotifier _networkAccessibleStateDidUpdateNotifier;
+    BOOL _checkActiveLaterWhenDidBecomeActive;
+    BOOL _checkingActiveLater;
 }
 
 
 @end
 
+@interface ZYNetworkAccessibity()
+@end
+
 
 @implementation ZYNetworkAccessibity
 
+
 #pragma mark - Public
+
++ (void)start {
+    [[self sharedInstance] setupNetworkAccessibity];
+}
+
++ (void)stop {
+    [[self sharedInstance] cleanNetworkAccessibity];
+}
 
 + (void)setAlertEnable:(BOOL)setAlertEnable {
     [self sharedInstance]->_automaticallyAlert = setAlertEnable;
 }
 
-
 + (void)checkState:(void (^)(ZYNetworkAccessibleState))block {
-    
     [[self sharedInstance] checkNetworkAccessibleStateWithCompletionBlock:block];
 }
 
-
 + (void)monitor:(void (^)(ZYNetworkAccessibleState))block {
-    
     [[self sharedInstance] monitorNetworkAccessibleStateWithCompletionBlock:block];
 }
 
@@ -72,44 +83,37 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     dispatch_once(&onceToken, ^{
         instance = [[self alloc] init];
     });
-    
     return instance;
 }
 
 
 - (void)setNetworkAccessibleStateDidUpdateNotifier:(NetworkAccessibleStateNotifier)networkAccessibleStateDidUpdateNotifier {
     _networkAccessibleStateDidUpdateNotifier = [networkAccessibleStateDidUpdateNotifier copy];
-    
     [self startCheck];
 }
 
 
 - (void)checkNetworkAccessibleStateWithCompletionBlock:(void (^)(ZYNetworkAccessibleState))block {
+    __weak __typeof(self)weakSelf = self;
     
-    [_checkingCallbacks addObject:[block copy]];
-    
-    [self startCheck];
-    
+    [self waitActive:^{
+        __strong __typeof(weakSelf)strongSelf = weakSelf;
+        [strongSelf->_checkingCallbacks addObject:[block copy]];
+        [strongSelf startCheck];
+        
+    }];
 }
 
 
 - (void)monitorNetworkAccessibleStateWithCompletionBlock:(void (^)(ZYNetworkAccessibleState))block {
-    
     _networkAccessibleStateDidUpdateNotifier = [block copy];
 }
-
 
 - (ZYNetworkAccessibleState)currentState {
     return _previousState;
 }
 
 #pragma mark - Life cycle
-
-+ (void)load {
-    // 默认开启，这么写不太适合，后面可以提供下开关
-    
-    [ZYNetworkAccessibity sharedInstance];
-}
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
@@ -118,94 +122,162 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 - (instancetype)init {
     if (self = [super init]) {
         
-        _cellularData = [[CTCellularData alloc] init];
-        
-        // 监听网络变化状态
-        _reachabilityRef = ({
-            struct sockaddr_in zeroAddress;
-            bzero(&zeroAddress, sizeof(zeroAddress));
-            zeroAddress.sin_len = sizeof(zeroAddress);
-            zeroAddress.sin_family = AF_INET;
-            SCNetworkReachabilityCreateWithAddress(kCFAllocatorDefault, (const struct sockaddr *) &zeroAddress);
-        });
-        
-        // 利用 cellularDataRestrictionDidUpdateNotifier 的回调时机来进行首次检查，因为如果启动时就去检查 会得到 kCTCellularDataRestrictedStateUnknown 的结果
-        __weak __typeof(self)weakSelf = self;
-        _cellularData.cellularDataRestrictionDidUpdateNotifier = ^(CTCellularDataRestrictedState state) {
-            
-            __strong __typeof(weakSelf)strongSelf = weakSelf;
-            
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
-                    [[NSNotificationCenter defaultCenter] addObserver:strongSelf selector:@selector(applicationDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
-                } else {
-                    [strongSelf startCheck];
-                }
-            });
-            
-        };
-        
-        _checkingCallbacks = [NSMutableArray array];
-        
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
-        
-        [self startNotifier];
-        
-        
     }
     return self;
 }
 
 #pragma mark - NSNotification
 
+- (void)setupNetworkAccessibity {
+    
+    if (_reachabilityRef || _cellularData) {
+        return;
+    }
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
+    
+    _reachabilityRef = SCNetworkReachabilityCreateWithName(NULL, "223.5.5.5");
+    // 此句会触发系统弹出权限询问框
+    SCNetworkReachabilityScheduleWithRunLoop(_reachabilityRef, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    
+    _checkingCallbacks = [NSMutableArray array];
+    _becomeActiveCallbacks = [NSMutableArray array];
+    
+    // 这里要延迟到主界面可响应事件一段时间后再初始化 下面的方法，否则会拿到一些不准确的信息。
+    [self waitActive:^{
+        
+        
+        
+    }];
+    
+    [self startReachabilityNotifier];
+    
+    [self startCellularDataNotifier];
+}
+
+- (void)cleanNetworkAccessibity {
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    _cellularData.cellularDataRestrictionDidUpdateNotifier = nil;
+    _cellularData = nil;
+    
+    SCNetworkReachabilityUnscheduleFromRunLoop(_reachabilityRef, CFRunLoopGetMain(), kCFRunLoopCommonModes);
+    _reachabilityRef = nil;
+    
+    [self cancelEnsureActive];
+    [self hideNetworkRestrictedAlert];
+    
+    [_checkingCallbacks removeAllObjects];
+    _checkingCallbacks = nil;
+    
+    [_becomeActiveCallbacks removeAllObjects];
+    _becomeActiveCallbacks = nil;
+    
+    _previousState = ZYNetworkChecking;
+    
+    _checkActiveLaterWhenDidBecomeActive = NO;
+    _checkingActiveLater = NO;
+    
+}
+
 
 - (void)applicationWillResignActive {
-    
     [self hideNetworkRestrictedAlert];
+    
+    if (_checkingActiveLater) {
+        [self cancelEnsureActive];
+        _checkActiveLaterWhenDidBecomeActive = YES;
+    }
 }
 
 - (void)applicationDidBecomeActive {
     
-    [self startCheck];
-    
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
+    if (_checkActiveLaterWhenDidBecomeActive) {
+        [self checkActiveLater];
+        _checkActiveLaterWhenDidBecomeActive = NO;
+    }
 }
 
 
-#pragma mark - Private
+#pragma mark - Active Checker
 
+// 如果当前 app 是非可响应状态（一般是启动的时候），则等到 app 激活且保持一秒以上，再回调
+// 因为启动完成后，3 秒内可能会再次弹出「是否允许 XXX 使用网络」，此时的 applicationState 是 UIApplicationStateInactive）
+
+- (void)waitActive:(dispatch_block_t)block {
+    [_becomeActiveCallbacks addObject:[block copy]];
+    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+       _checkActiveLaterWhenDidBecomeActive = YES;
+    } else {
+        [self checkActiveLater];
+    }
+}
+
+- (void)checkActiveLater {
+    _checkingActiveLater = YES;
+    [self performSelector:@selector(ensureActive) withObject:nil afterDelay:2 inModes:@[NSRunLoopCommonModes]];
+}
+
+- (void)ensureActive {
+    _checkingActiveLater = NO;
+    for (dispatch_block_t block in _becomeActiveCallbacks) {
+        block();
+    }
+    [_becomeActiveCallbacks removeAllObjects];
+}
+
+- (void)cancelEnsureActive {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(ensureActive) object:nil];
+}
+
+
+#pragma mark - Reachability
 
 static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void* info) {
-    
     ZYNetworkAccessibity *networkAccessibity = (__bridge ZYNetworkAccessibity *)info;
     if (![networkAccessibity isKindOfClass: [ZYNetworkAccessibity class]]) {
         return;
     }
-    
     [networkAccessibity startCheck];
 }
 
 // 监听用户从 Wi-Fi 切换到 蜂窝数据，或者从蜂窝数据切换到 Wi-Fi，另外当从授权到未授权，或者未授权到授权也会调用该方法
-- (BOOL)startNotifier {
-    BOOL returnValue = NO;
+- (void)startReachabilityNotifier {
     SCNetworkReachabilityContext context = {0, (__bridge void *)(self), NULL, NULL, NULL};
-    
-    if (SCNetworkReachabilitySetCallback(_reachabilityRef, ReachabilityCallback, &context))
-    {
-        if (SCNetworkReachabilityScheduleWithRunLoop(_reachabilityRef, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode))
-        {
-            returnValue = YES;
+    if (SCNetworkReachabilitySetCallback(_reachabilityRef, ReachabilityCallback, &context)) {
+        SCNetworkReachabilityScheduleWithRunLoop(_reachabilityRef, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    }
+}
+
+- (void)startCellularDataNotifier {
+    __weak __typeof(self)weakSelf = self;
+    self->_cellularData = [[CTCellularData alloc] init];
+    self->_cellularData.cellularDataRestrictionDidUpdateNotifier = ^(CTCellularDataRestrictedState state) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf startCheck];
+        });
+    };
+}
+
+- (BOOL)currentReachable {
+    SCNetworkReachabilityFlags flags;
+    if (SCNetworkReachabilityGetFlags(self->_reachabilityRef, &flags)) {
+        if ((flags & kSCNetworkReachabilityFlagsReachable) == 0) {
+            return NO;
+        } else {
+            return YES;
         }
     }
-    
-    return returnValue;
+    return NO;
 }
 
 
-
+#pragma mark - Check Accessibity
 
 - (void)startCheck {
-    
     if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self currentReachable]) {
         
         /* iOS 10 以下 不够用检测默认通过 **/
@@ -241,9 +313,13 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
         case kCTCellularDataNotRestricted: // 系统 API 访问有有蜂窝数据访问权限，那就必定有 Wi-Fi 数据访问权限
             [self notiWithAccessibleState:ZYNetworkAccessible];
             break;
-        case kCTCellularDataRestrictedStateUnknown:
-            [self notiWithAccessibleState:ZYNetworkUnknown];
+        case kCTCellularDataRestrictedStateUnknown: {
+            // CTCellularData 刚开始初始化的时候，可能会拿到 kCTCellularDataRestrictedStateUnknown 延迟一下再试就好了
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self startCheck];
+            });
             break;
+        }
         default:
             break;
     };
@@ -251,7 +327,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
 
 - (void)getCurrentNetworkType:(void(^)(ZYNetworkType))block {
-   
     if ([self isWiFiEnable]) {
         return block(ZYNetworkTypeWiFi);
     }
@@ -267,7 +342,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
 - (ZYNetworkType)getNetworkTypeFromStatusBar {
     NSInteger type = 0;
-    
     @try {
         UIApplication *app = [UIApplication sharedApplication];
         UIView *statusBar = [app valueForKeyPath:@"statusBar"];
@@ -279,32 +353,24 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
         BOOL isModernStatusBar = [statusBar isKindOfClass:NSClassFromString(@"UIStatusBar_Modern")];
         
         if (isModernStatusBar) { // 在 iPhone X 上 statusBar 属于 UIStatusBar_Modern ，需要特殊处理
-            
             id currentData = [statusBar valueForKeyPath:@"statusBar.currentData"];
-            
             BOOL wifiEnable = [[currentData valueForKeyPath:@"_wifiEntry.isEnabled"] boolValue];
             
             // 这里不能用 _cellularEntry.isEnabled 来判断，该值即使关闭仍然有是 YES
             
             BOOL cellularEnable = [[currentData valueForKeyPath:@"_cellularEntry.type"] boolValue];
-            
             return  wifiEnable     ? ZYNetworkTypeWiFi :
                     cellularEnable ? ZYNetworkTypeCellularData : ZYNetworkTypeOffline;
-            
-            
-            
         } else { // 传统的 statusBar
             NSArray *children = [[statusBar valueForKeyPath:@"foregroundView"] subviews];
             for (id child in children) {
                 if ([child isKindOfClass:[NSClassFromString(@"UIStatusBarDataNetworkItemView") class]]) {
                     type = [[child valueForKeyPath:@"dataNetworkType"] intValue];
-                    
                     // type == 1  => 2G
                     // type == 2  => 3G
                     // type == 3  => 4G
                     // type == 4  => LTE
                     // type == 5  => Wi-Fi
-                    
                 }
             }
             return type == 0 ? ZYNetworkTypeOffline :
@@ -314,8 +380,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
         
     }
     return 0;
-    
-    
 }
 
 
@@ -335,27 +399,9 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     return (info != nil);
 }
 
-
-
-- (BOOL)currentReachable {
-    SCNetworkReachabilityFlags flags;
-    if (SCNetworkReachabilityGetFlags(self->_reachabilityRef, &flags)) {
-        if ((flags & kSCNetworkReachabilityFlagsReachable) == 0) {
-            return NO;
-        } else {
-            return YES;
-        }
-    }
-    return NO;
-}
-
-
-
 #pragma mark - Callback
 
 - (void)notiWithAccessibleState:(ZYNetworkAccessibleState)state {
-    
-    
     if (_automaticallyAlert) {
         if (state == ZYNetworkRestricted) {
                 [self showNetworkRestrictedAlert];
@@ -367,28 +413,25 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     if (state != _previousState) {
         _previousState = state;
         
+        if (_networkAccessibleStateDidUpdateNotifier) {
+            _networkAccessibleStateDidUpdateNotifier(state);
+        }
+        
+        [[NSNotificationCenter defaultCenter] postNotificationName:ZYNetworkAccessibityChangedNotification object:nil];
+        
     }
-    
-    if (_networkAccessibleStateDidUpdateNotifier) {
-        _networkAccessibleStateDidUpdateNotifier(state);
-    }
-    
-    [[NSNotificationCenter defaultCenter] postNotificationName:ZYNetworkAccessibityChangedNotification object:nil];\
     
     for (NetworkAccessibleStateNotifier block in _checkingCallbacks) {
         block(state);
     }
-    
     [_checkingCallbacks removeAllObjects];
 }
-
 
 
 - (void)showNetworkRestrictedAlert {
     if (self.alertController.presentingViewController == nil && ![self.alertController isBeingPresented]) {
         [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:self.alertController animated:YES completion:nil];
     }
-
 }
 
 - (void)hideNetworkRestrictedAlert {
