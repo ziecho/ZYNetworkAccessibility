@@ -28,7 +28,6 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 @interface ZYNetworkAccessibity(){
     SCNetworkReachabilityRef _reachabilityRef;
     CTCellularData *_cellularData;
-    NSMutableArray *_checkingCallbacks;
     NSMutableArray *_becomeActiveCallbacks;
     ZYNetworkAccessibleState _previousState;
     UIAlertController *_alertController;
@@ -62,11 +61,8 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     [self sharedInstance]->_automaticallyAlert = setAlertEnable;
 }
 
-+ (void)checkState:(void (^)(ZYNetworkAccessibleState))block {
-    [[self sharedInstance] checkNetworkAccessibleStateWithCompletionBlock:block];
-}
 
-+ (void)monitor:(void (^)(ZYNetworkAccessibleState))block {
++ (void)setStateDidUpdateNotifier:(void (^)(ZYNetworkAccessibleState))block {
     [[self sharedInstance] monitorNetworkAccessibleStateWithCompletionBlock:block];
 }
 
@@ -92,17 +88,6 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     [self startCheck];
 }
 
-
-- (void)checkNetworkAccessibleStateWithCompletionBlock:(void (^)(ZYNetworkAccessibleState))block {
-    __weak __typeof(self)weakSelf = self;
-    
-    [self waitActive:^{
-        __strong __typeof(weakSelf)strongSelf = weakSelf;
-        [strongSelf->_checkingCallbacks addObject:[block copy]];
-        [strongSelf startCheck];
-        
-    }];
-}
 
 
 - (void)monitorNetworkAccessibleStateWithCompletionBlock:(void (^)(ZYNetworkAccessibleState))block {
@@ -142,19 +127,34 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     // 此句会触发系统弹出权限询问框
     SCNetworkReachabilityScheduleWithRunLoop(_reachabilityRef, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
     
-    _checkingCallbacks = [NSMutableArray array];
+
     _becomeActiveCallbacks = [NSMutableArray array];
     
-    // 这里要延迟到主界面可响应事件一段时间后再初始化 下面的方法，否则会拿到一些不准确的信息。
-    [self waitActive:^{
-        
-        
-        
-    }];
+    BOOL firstRun = ({
+        static NSString * RUN_FLAG = @"ZYNetworkAccessibityRunFlag";
+        BOOL value = [[NSUserDefaults standardUserDefaults] boolForKey:RUN_FLAG];
+        if (!value) {
+            [[NSUserDefaults standardUserDefaults] setBool:YES forKey:RUN_FLAG];
+        }
+        !value;
+    });
     
-    [self startReachabilityNotifier];
+    dispatch_block_t startNotifier = ^{
+        [self startReachabilityNotifier];
+        
+        [self startCellularDataNotifier];
+    };
     
-    [self startCellularDataNotifier];
+    if (firstRun) {
+        // 第一次运行系统会弹框，需要延迟一下在判断，否则会拿到不准确的结果
+        [self waitActive:^{
+            startNotifier();
+        }];
+    } else {
+        startNotifier();
+    }
+    
+    
 }
 
 - (void)cleanNetworkAccessibity {
@@ -169,9 +169,6 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     
     [self cancelEnsureActive];
     [self hideNetworkRestrictedAlert];
-    
-    [_checkingCallbacks removeAllObjects];
-    _checkingCallbacks = nil;
     
     [_becomeActiveCallbacks removeAllObjects];
     _becomeActiveCallbacks = nil;
@@ -205,7 +202,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 #pragma mark - Active Checker
 
 // 如果当前 app 是非可响应状态（一般是启动的时候），则等到 app 激活且保持一秒以上，再回调
-// 因为启动完成后，3 秒内可能会再次弹出「是否允许 XXX 使用网络」，此时的 applicationState 是 UIApplicationStateInactive）
+// 因为启动完成后，2 秒内可能会再次弹出「是否允许 XXX 使用网络」，此时的 applicationState 是 UIApplicationStateInactive）
 
 - (void)waitActive:(dispatch_block_t)block {
     [_becomeActiveCallbacks addObject:[block copy]];
@@ -420,11 +417,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
         [[NSNotificationCenter defaultCenter] postNotificationName:ZYNetworkAccessibityChangedNotification object:nil];
         
     }
-    
-    for (NetworkAccessibleStateNotifier block in _checkingCallbacks) {
-        block(state);
-    }
-    [_checkingCallbacks removeAllObjects];
 }
 
 

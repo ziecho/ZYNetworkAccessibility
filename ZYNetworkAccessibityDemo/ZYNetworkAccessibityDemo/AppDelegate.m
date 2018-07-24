@@ -20,6 +20,10 @@
     
     [ZYNetworkAccessibity setAlertEnable:YES];
     
+    [ZYNetworkAccessibity setStateDidUpdateNotifier:^(ZYNetworkAccessibleState state) {
+        NSLog(@"setStateDidUpdateNotifier > %zd", state);
+    }];
+    
     [ZYNetworkAccessibity start];
     
     return YES;
