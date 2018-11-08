@@ -15,6 +15,12 @@
 #import <sys/socket.h>
 #import <netinet/in.h>
 
+// ifaddrs
+#import <ifaddrs.h>
+
+// inet
+#import <arpa/inet.h>
+
 
 NSString * const ZYNetworkAccessibityChangedNotification = @"ZYNetworkAccessibityChangedNotification";
 
@@ -147,9 +153,13 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     
     if (firstRun) {
         // 第一次运行系统会弹框，需要延迟一下在判断，否则会拿到不准确的结果
-        [self waitActive:^{
-            startNotifier();
-        }];
+        // 表现为：ReachabilityNotifier 有一定概率拿到的结果是可以访问, CellularDataNotifier 拿到的是拒绝
+        // 这里延时 3 秒再检测是因为某些情况下，弹框存在较长的延时。
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self waitActive:^{
+                startNotifier();
+            }];
+        });
     } else {
         startNotifier();
     }
@@ -384,16 +394,38 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
  判断用户是否连接到 Wi-Fi
  */
 - (BOOL)isWiFiEnable {
-    NSArray *interfaces = (__bridge_transfer NSArray *)CNCopySupportedInterfaces();
-    if (!interfaces) {
-        return NO;
+    return [self wiFiIPAddress].length > 0;
+}
+
+- (NSString *)wiFiIPAddress {
+    @try {
+        NSString *ipAddress;
+        struct ifaddrs *interfaces;
+        struct ifaddrs *temp;
+        int Status = 0;
+        Status = getifaddrs(&interfaces);
+        if (Status == 0) {
+            temp = interfaces;
+            while(temp != NULL) {
+                if(temp->ifa_addr->sa_family == AF_INET) {
+                    if([[NSString stringWithUTF8String:temp->ifa_name] isEqualToString:@"en0"]) {
+                        ipAddress = [NSString stringWithUTF8String:inet_ntoa(((struct sockaddr_in *)temp->ifa_addr)->sin_addr)];
+                    }
+                }
+                temp = temp->ifa_next;
+            }
+        }
+        
+        freeifaddrs(interfaces);
+        
+        if (ipAddress == nil || ipAddress.length <= 0) {
+            return nil;
+        }
+        return ipAddress;
     }
-    NSDictionary *info = nil;
-    for (NSString *ifnam in interfaces) {
-        info = (__bridge_transfer NSDictionary *)CNCopyCurrentNetworkInfo((__bridge CFStringRef)ifnam);
-        if (info && [info count]) { break; }
+    @catch (NSException *exception) {
+        return nil;
     }
-    return (info != nil);
 }
 
 #pragma mark - Callback
