@@ -19,7 +19,7 @@
 
 ## 用法
 
-1、将 ZYNetworkAccessibity.h 和 ZYNetworkAccessibity.m 在合适的时机，比如 didFinishLaunchingWithOptions 开启，ZYNetworkAccessibity：
+1、将 ZYNetworkAccessibity.h 和 ZYNetworkAccessibity.m 添加到项目中，在合适的时机，比如 didFinishLaunchingWithOptions 开启，ZYNetworkAccessibity：
 ```objc
 [ZYNetworkAccessibity start];
 ```
