@@ -350,8 +350,21 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 - (ZYNetworkType)getNetworkTypeFromStatusBar {
     NSInteger type = 0;
     @try {
-        UIApplication *app = [UIApplication sharedApplication];
-        UIView *statusBar = [app valueForKeyPath:@"statusBar"];
+        UIView *statusBar = nil;
+        if (@available(iOS 13.0, *)) {
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wundeclared-selector"
+            UIStatusBarManager *statusBarManager = UIApplication.sharedApplication.keyWindow.windowScene.statusBarManager;
+            if ([statusBarManager respondsToSelector:@selector(createLocalStatusBar)]) {
+                UIView *_localStatusBar = [statusBarManager performSelector:@selector(createLocalStatusBar)];
+                if ([_localStatusBar respondsToSelector:@selector(statusBar)]) {
+                    statusBar = [_localStatusBar performSelector:@selector(statusBar)];
+                }
+            }
+    #pragma clang diagnostic pop
+        } else {
+            statusBar = [UIApplication.sharedApplication valueForKey:@"statusBar"];
+        }
         
         if (statusBar == nil ){
             return ZYNetworkTypeUnknown;
