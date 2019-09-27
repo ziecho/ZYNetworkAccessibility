@@ -126,17 +126,8 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     }
     
 
-    if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self currentReachable] || [self isSimulator]) {
-        
-        /* iOS 10 以下 不够用检测默认通过 **/
-        
-        /* 先用 currentReachable 判断，若返回的为 YES 则说明：
-         1. 用户选择了 「WALN 与蜂窝移动网」并处于其中一种网络环境下。
-         2. 用户选择了 「WALN」并处于 WALN 网络环境下。
-         
-         此时是有网络访问权限的，直接返回 ZYNetworkAccessible
-         **/
-        
+    if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self isSimulator]) {
+        // * iOS 10 以下或者是模拟器不够用检测默认通过
         [self notiWithAccessibleState:ZYNetworkAccessible];
         return;
     }
@@ -301,6 +292,16 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 #pragma mark - Check Accessibity
 
 - (void)startCheck {
+    
+    if ([self currentReachable]) {
+        /* 先用 currentReachable 判断，若返回的为 YES 则说明：
+         1. 用户选择了 「WALN 与蜂窝移动网」并处于其中一种网络环境下。
+         2. 用户选择了 「WALN」并处于 WALN 网络环境下。
+         
+         此时是有网络访问权限的，直接返回 ZYNetworkAccessible
+         **/
+        return [self notiWithAccessibleState:ZYNetworkAccessible];
+    }
     
     CTCellularDataRestrictedState state = _cellularData.restrictedState;
     
