@@ -125,6 +125,22 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
         return;
     }
     
+
+    if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self currentReachable] || [self isSimulator]) {
+        
+        /* iOS 10 以下 不够用检测默认通过 **/
+        
+        /* 先用 currentReachable 判断，若返回的为 YES 则说明：
+         1. 用户选择了 「WALN 与蜂窝移动网」并处于其中一种网络环境下。
+         2. 用户选择了 「WALN」并处于 WALN 网络环境下。
+         
+         此时是有网络访问权限的，直接返回 ZYNetworkAccessible
+         **/
+        
+        [self notiWithAccessibleState:ZYNetworkAccessible];
+        return;
+    }
+    
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
@@ -285,20 +301,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 #pragma mark - Check Accessibity
 
 - (void)startCheck {
-    if ([UIDevice currentDevice].systemVersion.floatValue < 10.0 || [self currentReachable]) {
-        
-        /* iOS 10 以下 不够用检测默认通过 **/
-        
-        /* 先用 currentReachable 判断，若返回的为 YES 则说明：
-         1. 用户选择了 「WALN 与蜂窝移动网」并处于其中一种网络环境下。
-         2. 用户选择了 「WALN」并处于 WALN 网络环境下。
-         
-         此时是有网络访问权限的，直接返回 ZYNetworkAccessible
-         **/
-        
-        [self notiWithAccessibleState:ZYNetworkAccessible];
-        return;
-    }
     
     CTCellularDataRestrictedState state = _cellularData.restrictedState;
     
@@ -350,6 +352,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 - (ZYNetworkType)getNetworkTypeFromStatusBar {
     NSInteger type = 0;
     @try {
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000
         UIView *statusBar = nil;
         if (@available(iOS 13.0, *)) {
     #pragma clang diagnostic push
@@ -362,10 +365,13 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
                 }
             }
     #pragma clang diagnostic pop
+
         } else {
             statusBar = [UIApplication.sharedApplication valueForKey:@"statusBar"];
         }
-        
+#else
+        UIView *statusBar = [UIApplication.sharedApplication valueForKey:@"statusBar"];;
+#endif
         if (statusBar == nil ){
             return ZYNetworkTypeUnknown;
         }
@@ -439,6 +445,15 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     @catch (NSException *exception) {
         return nil;
     }
+}
+
+- (BOOL)isSimulator {
+#if TARGET_OS_SIMULATOR
+    BOOL isSimulator = YES;
+#else
+    BOOL isSimulator = NO;
+#endif
+    return isSimulator;
 }
 
 #pragma mark - Callback
