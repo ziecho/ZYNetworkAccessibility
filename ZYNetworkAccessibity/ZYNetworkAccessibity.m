@@ -353,8 +353,8 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 - (ZYNetworkType)getNetworkTypeFromStatusBar {
     NSInteger type = 0;
     @try {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000
         UIView *statusBar = nil;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000
         if (@available(iOS 13.0, *)) {
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wundeclared-selector"
