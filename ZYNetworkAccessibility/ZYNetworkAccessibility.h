@@ -1,5 +1,5 @@
 //
-//  ZYNetworkAccessibity.h
+//  ZYNetworkAccessibility.h
 //
 //  Created by zie on 16/11/17.
 //  Copyright © 2017年 zie. All rights reserved.
@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-extern NSString * const ZYNetworkAccessibityChangedNotification;
+extern NSString * const ZYNetworkAccessibilityChangedNotification;
 
 typedef NS_ENUM(NSUInteger, ZYNetworkAccessibleState) {
     ZYNetworkChecking  = 0,
@@ -18,15 +18,15 @@ typedef NS_ENUM(NSUInteger, ZYNetworkAccessibleState) {
 
 typedef void (^NetworkAccessibleStateNotifier)(ZYNetworkAccessibleState state);
 
-@interface ZYNetworkAccessibity : NSObject
+@interface ZYNetworkAccessibility : NSObject
 
 /**
- 开启 ZYNetworkAccessibity
+ 开启 ZYNetworkAccessibility
  */
 + (void)start;
 
 /**
- 停止 ZYNetworkAccessibity
+ 停止 ZYNetworkAccessibility
  */
 + (void)stop;
 

@@ -1,6 +1,6 @@
 //
 //  main.m
-//  ZYNetworkAccessibityDemo
+//  ZYNetworkAccessibilityDemo
 //
 //  Created by zie on 20/7/18.
 //  Copyright © 2018年 zie. All rights reserved.

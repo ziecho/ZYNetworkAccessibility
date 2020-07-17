@@ -1,13 +1,13 @@
 //
 //  AppDelegate.m
-//  ZYNetworkAccessibityDemo
+//  ZYNetworkAccessibilityDemo
 //
 //  Created by zie on 20/7/18.
 //  Copyright © 2018年 zie. All rights reserved.
 //
 
 #import "AppDelegate.h"
-#import "ZYNetworkAccessibity.h"
+#import "ZYNetworkAccessibility.h"
 
 @interface AppDelegate ()
 
@@ -18,13 +18,13 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     
-    [ZYNetworkAccessibity setAlertEnable:YES];
+    [ZYNetworkAccessibility setAlertEnable:YES];
     
-    [ZYNetworkAccessibity setStateDidUpdateNotifier:^(ZYNetworkAccessibleState state) {
+    [ZYNetworkAccessibility setStateDidUpdateNotifier:^(ZYNetworkAccessibleState state) {
         NSLog(@"setStateDidUpdateNotifier > %zd", state);
     }];
     
-    [ZYNetworkAccessibity start];
+    [ZYNetworkAccessibility start];
     
     return YES;
 }

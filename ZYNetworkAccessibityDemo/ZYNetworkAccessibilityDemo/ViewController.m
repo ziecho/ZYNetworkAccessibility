@@ -1,13 +1,13 @@
 //
 //  ViewController.m
-//  ZYNetworkAccessibityDemo
+//  ZYNetworkAccessibilityDemo
 //
 //  Created by zie on 20/7/18.
 //  Copyright © 2018年 zie. All rights reserved.
 //
 
 #import "ViewController.h"
-#import "ZYNetworkAccessibity.h"
+#import "ZYNetworkAccessibility.h"
 
 #import <SystemConfiguration/CaptiveNetwork.h>
 #import <CoreTelephony/CTTelephonyNetworkInfo.h>
@@ -35,14 +35,14 @@ static NSString * NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibleState 
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    self.label.text = NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibity.currentState);
+    self.label.text = NSStringFromZYNetworkAccessibleState(ZYNetworkAccessibility.currentState);
     
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkChanged:) name:ZYNetworkAccessibityChangedNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkChanged:) name:ZYNetworkAccessibilityChangedNotification object:nil];
 }
 
 - (void)networkChanged:(NSNotification *)notification {
     
-    ZYNetworkAccessibleState state = ZYNetworkAccessibity.currentState;
+    ZYNetworkAccessibleState state = ZYNetworkAccessibility.currentState;
     
     self.label.text = NSStringFromZYNetworkAccessibleState(state);
     

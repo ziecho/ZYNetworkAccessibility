@@ -1,10 +1,10 @@
 //
-//  ZYNetworkAccessibity.m
+//  ZYNetworkAccessibility.m
 //  Created by zie on 16/11/17.
 //  Copyright © 2017年 zie. All rights reserved.
 //
 
-#import "ZYNetworkAccessibity.h"
+#import "ZYNetworkAccessibility.h"
 #import <UIKit/UIKit.h>
 #import <SystemConfiguration/CaptiveNetwork.h>
 #import <CoreTelephony/CTTelephonyNetworkInfo.h>
@@ -22,7 +22,7 @@
 #import <arpa/inet.h>
 
 
-NSString * const ZYNetworkAccessibityChangedNotification = @"ZYNetworkAccessibityChangedNotification";
+NSString * const ZYNetworkAccessibilityChangedNotification = @"ZYNetworkAccessibilityChangedNotification";
 
 typedef NS_ENUM(NSInteger, ZYNetworkType) {
     ZYNetworkTypeUnknown ,
@@ -31,7 +31,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     ZYNetworkTypeCellularData ,
 };
 
-@interface ZYNetworkAccessibity(){
+@interface ZYNetworkAccessibility(){
     SCNetworkReachabilityRef _reachabilityRef;
     CTCellularData *_cellularData;
     NSMutableArray *_becomeActiveCallbacks;
@@ -46,21 +46,21 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 
 @end
 
-@interface ZYNetworkAccessibity()
+@interface ZYNetworkAccessibility()
 @end
 
 
-@implementation ZYNetworkAccessibity
+@implementation ZYNetworkAccessibility
 
 
 #pragma mark - Public
 
 + (void)start {
-    [[self sharedInstance] setupNetworkAccessibity];
+    [[self sharedInstance] setupNetworkAccessibility];
 }
 
 + (void)stop {
-    [[self sharedInstance] cleanNetworkAccessibity];
+    [[self sharedInstance] cleanNetworkAccessibility];
 }
 
 + (void)setAlertEnable:(BOOL)setAlertEnable {
@@ -79,8 +79,8 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 #pragma mark - Public entity method
 
 
-+ (ZYNetworkAccessibity *)sharedInstance {
-    static ZYNetworkAccessibity * instance = nil;
++ (ZYNetworkAccessibility *)sharedInstance {
+    static ZYNetworkAccessibility * instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         instance = [[self alloc] init];
@@ -119,7 +119,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 
 #pragma mark - NSNotification
 
-- (void)setupNetworkAccessibity {
+- (void)setupNetworkAccessibility {
     
     if (_reachabilityRef || _cellularData) {
         return;
@@ -144,7 +144,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     _becomeActiveCallbacks = [NSMutableArray array];
     
     BOOL firstRun = ({
-        static NSString * RUN_FLAG = @"ZYNetworkAccessibityRunFlag";
+        static NSString * RUN_FLAG = @"ZYNetworkAccessibilityRunFlag";
         BOOL value = [[NSUserDefaults standardUserDefaults] boolForKey:RUN_FLAG];
         if (!value) {
             [[NSUserDefaults standardUserDefaults] setBool:YES forKey:RUN_FLAG];
@@ -174,7 +174,7 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
     
 }
 
-- (void)cleanNetworkAccessibity {
+- (void)cleanNetworkAccessibility {
     
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
@@ -251,11 +251,11 @@ typedef NS_ENUM(NSInteger, ZYNetworkType) {
 #pragma mark - Reachability
 
 static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void* info) {
-    ZYNetworkAccessibity *networkAccessibity = (__bridge ZYNetworkAccessibity *)info;
-    if (![networkAccessibity isKindOfClass: [ZYNetworkAccessibity class]]) {
+    ZYNetworkAccessibility *networkAccessibility = (__bridge ZYNetworkAccessibility *)info;
+    if (![networkAccessibility isKindOfClass: [ZYNetworkAccessibility class]]) {
         return;
     }
-    [networkAccessibity startCheck];
+    [networkAccessibility startCheck];
 }
 
 // 监听用户从 Wi-Fi 切换到 蜂窝数据，或者从蜂窝数据切换到 Wi-Fi，另外当从授权到未授权，或者未授权到授权也会调用该方法
@@ -289,7 +289,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 }
 
 
-#pragma mark - Check Accessibity
+#pragma mark - Check Accessibility
 
 - (void)startCheck {
     
@@ -475,7 +475,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
             _networkAccessibleStateDidUpdateNotifier(state);
         }
         
-        [[NSNotificationCenter defaultCenter] postNotificationName:ZYNetworkAccessibityChangedNotification object:nil];
+        [[NSNotificationCenter defaultCenter] postNotificationName:ZYNetworkAccessibilityChangedNotification object:nil];
         
     }
 }
