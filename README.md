@@ -1,4 +1,4 @@
-# ZYNetworkAccessibity
+# ZYNetworkAccessibility
 
 
 [Blog 介绍](http://ziecho.com/post/ios/ios-wang-luo-quan-xian-bei-guan-bi-jian-ce)
@@ -14,25 +14,25 @@
 
 对于第 1 种情况，出现在 iOS 10 比较多，一旦出现后系统设置里也找不到「无线数据」这一配置选项，随着 iOS 的更新，貌似被 Apple 修复了，GitHub 上面有 [ZIKCellularAuthorization](https://github.com/Zuikyo/ZIKCellularAuthorization) 其进行分析和提出一种解决方案，强制让系统弹出那个询问框。
 
-但是第 2、3种情况现在 iOS 12 还经常有发生，对于这种情况，ZYNetworkAccessibity 提供了检测帮忙开发者引导用户打开网络权限。
+但是第 2、3种情况现在 iOS 12 还经常有发生，对于这种情况，ZYNetworkAccessibility 提供了检测帮忙开发者引导用户打开网络权限。
 
 
 ## 用法
 
-1、将 ZYNetworkAccessibity.h 和 ZYNetworkAccessibity.m 添加到项目中，在合适的时机，比如 didFinishLaunchingWithOptions 开启，ZYNetworkAccessibity：
+1、将 ZYNetworkAccessibility.h 和 ZYNetworkAccessibility.m 添加到项目中，在合适的时机，比如 didFinishLaunchingWithOptions 开启，ZYNetworkAccessibility：
 ```objc
-[ZYNetworkAccessibity start];
+[ZYNetworkAccessibility start];
 ```
-2、监听 ZYNetworkAccessibityChangedNotification 并处理通知
+2、监听 ZYNetworkAccessibilityChangedNotification 并处理通知
 
 ```objc
-[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkChanged:) name:ZYNetworkAccessibityChangedNotification object:nil];
+[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(networkChanged:) name:ZYNetworkAccessibilityChangedNotification object:nil];
 ```
 
 ```objc
 - (void)networkChanged:(NSNotification *)notification {
     
-    ZYNetworkAccessibleState state = ZYNetworkAccessibity.currentState;
+    ZYNetworkAccessibleState state = ZYNetworkAccessibility.currentState;
 
     if (state == ZYNetworkRestricted) {
         NSLog(@"网络权限被关闭");
@@ -43,7 +43,7 @@
 另外还实现了自动提醒用户打开权限，如果你需要，请打开
 
 ```objc
-[ZYNetworkAccessibity setAlertEnable:YES];
+[ZYNetworkAccessibility setAlertEnable:YES];
 ```
 
 
